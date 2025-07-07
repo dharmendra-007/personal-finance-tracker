@@ -1,103 +1,234 @@
-import Image from "next/image";
+"use client"
 
-export default function Home() {
+import { useState, useEffect, useMemo } from "react"
+import axios from "axios"
+import { Plus, TrendingUp, TrendingDown, DollarSign, PiggyBank, AlertTriangle, IndianRupee } from "lucide-react"
+import { Button } from "../components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card"
+import type { TransactionInput } from "../schema/transaction"
+import { toast } from "sonner"
+import { StatsCard } from "@/components/stats-card"
+import { FinancialInsights } from "@/components/financial-insights"
+import { MonthlyExpensesChart } from "@/components/monthly-expenses-chart"
+import { TransactionForm } from "@/components/transaction-form"
+import { TransactionList } from "@/components/transaction-list"
+
+export interface Transaction {
+  _id?: string
+  amount: number
+  date: string
+  description: string
+  type: "income" | "expense"
+}
+interface FinancialStats {
+  totalIncome: number
+  totalExpenses: number
+  totalBalance: number
+  transactionCount: number
+  expenseRatio: number
+}
+
+export default function Dashboard() {
+  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [isFormOpen, setIsFormOpen] = useState(false)
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const financialStats: FinancialStats = useMemo(() => {
+    const totalIncome = transactions
+      .filter((t) => t.type === "income")
+      .reduce((sum, t) => sum + t.amount, 0)
+
+    const totalExpenses = transactions
+      .filter((t) => t.type === "expense")
+      .reduce((sum, t) => sum + t.amount, 0)
+
+    const totalBalance = totalIncome - totalExpenses
+    const expenseRatio = totalIncome > 0 ? (totalExpenses / totalIncome) * 100 : 0
+
+    return {
+      totalIncome,
+      totalExpenses,
+      totalBalance,
+      transactionCount: transactions.length,
+      expenseRatio,
+    }
+  }, [transactions])
+
+  const fetchTransactions = async () => {
+    setIsLoading(true)
+    setError(null)
+    axios.get("/api/transactions")
+    .then((res) => {
+        setTransactions(res.data.data || [])
+    })
+    .catch((err) => {
+      const message = err.response.data.message || "Failed to load transactions"
+      setError("Failed to load transactions")
+      toast.error(message)
+    })
+    .finally(() => {
+      setIsLoading(false)
+    })
+  }
+
+  useEffect(() => {
+    fetchTransactions()
+  }, [])
+
+  const handleAddTransaction = async (transaction: TransactionInput) => {
+    axios.post("/api/transactions", transaction)
+    .then((res) => {
+      setTransactions((prev) => [res.data.data, ...prev])
+      toast.success("Transaction added successfully.")
+    })
+    .catch((err) => {
+      const message = err.response.data.message || "something went wrong"
+      toast.error(message)
+    })
+    .finally(() => setIsFormOpen(false))
+  }
+
+  const handleEditTransaction = async (id: string, transaction: TransactionInput) => {
+    axios.put(`/api/transactions/${id}`, transaction)
+    .then((res) => {
+      const data = res.data?.data
+      setTransactions((prev) => prev.map((t) => (t._id === id ? data : t)))
+      toast.success("Transaction updated successfully.")
+    })
+    .catch((err) => {
+      const message = err.response.data.message || "something went wrong"
+      toast.error(message)
+    })
+    .finally(() => {
+      setEditingTransaction(null)
+      setIsFormOpen(false)
+    })
+  }
+
+  const handleDeleteTransaction = async (id: string) => {
+    axios.delete(`/api/transactions/${id}`)
+    .then(() => {
+      setTransactions((prev) => prev.filter((t) => t._id !== id))
+      toast.success("Transaction deleted successfully.")
+    })
+    .catch((err) => {
+      const message = err.response.data.message || "Something went wrong" 
+      toast.error(message)
+    })
+  }
+
+  const openEditForm = (transaction: Transaction) => {
+    setEditingTransaction(transaction)
+    setIsFormOpen(true)
+  }
+
+  const closeForm = () => {
+    setIsFormOpen(false)
+    setEditingTransaction(null)
+  }
+
+  if (error && transactions.length === 0) {
+    return (
+      <div className="container mx-auto p-4">
+        <Card className="glass-card">
+          <CardContent className="flex flex-col items-center justify-center py-8">
+            <AlertTriangle className="w-12 h-12 text-destructive mb-4" />
+            <p className="text-destructive mb-4">{error}</p>
+            <Button onClick={fetchTransactions} className="gradient-card">
+              Try Again
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+    <div className="min-h-screen">
+      <div className="container mx-auto p-4 space-y-8">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h1 className="text-4xl font-bold text-emerald-400">
+              Personal Finance Tracker
+            </h1>
+            <p className="text-muted-foreground mt-2">Track your expenses and visualize your spending patterns</p>
+          </div>
+          <Button
+            onClick={() => setIsFormOpen(true)}
+            className="gradient-card w-full sm:w-auto shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+            <Plus className="w-4 h-4 mr-2" />
+            Add Transaction
+          </Button>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <StatsCard title="Total Income" value={financialStats.totalIncome} icon={TrendingUp} gradient="success-gradient" prefix="₹" className="bg-gradient-to-r from-green-800 to-green-600"/>
+
+          <StatsCard title="Total Expenses" value={financialStats.totalExpenses} icon={TrendingDown} gradient="warning-gradient" prefix="₹" className="bg-gradient-to-r from-red-800 to-orange-600
+"/>
+          <StatsCard
+            title="Balance"
+            value={financialStats.totalBalance}
+            icon={financialStats.totalBalance >= 0 ? PiggyBank : DollarSign}
+            gradient={financialStats.totalBalance >= 0 ? "info-gradient" : "warning-gradient"}
+            prefix="₹"
+            className="bg-gradient-to-l from-purple-600 
+"
           />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+          <StatsCard title="Transactions" value={financialStats.transactionCount} icon={IndianRupee} gradient="neutral-gradient" 
+          className="bg-gradient-to-r from-lime-900 to-yellow-700
+
+"/>
+        </div>
+
+        <FinancialInsights stats={financialStats} />
+
+        <div className="grid gap-6 lg:grid-cols-3">
+          <Card className="lg:col-span-2 shadow-lg border-white/30">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="w-5 h-5 text-purple-600" />
+                Monthly Expenses
+              </CardTitle>
+              <CardDescription>Your spending trends over the last 6 months</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <MonthlyExpensesChart transactions={transactions.filter((t) => t.type === "expense")} />
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-lg border-white/30">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <DollarSign className="w-5 h-5 text-green-600" />
+                Recent Transactions
+              </CardTitle>
+              <CardDescription>
+                {transactions.length} transaction{transactions.length !== 1 ? "s" : ""}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <TransactionList
+                transactions={transactions}
+                onEdit={openEditForm}
+                onDelete={handleDeleteTransaction}
+                isLoading={isLoading}
+              />
+            </CardContent>
+          </Card>
+        </div>
+
+        <TransactionForm
+          isOpen={isFormOpen}
+          onClose={closeForm}
+          onSubmit={editingTransaction ? (data) => handleEditTransaction(editingTransaction._id!, data) : handleAddTransaction}
+          initialData={editingTransaction}
+          isEditing={!!editingTransaction}
+        />
+      </div>
     </div>
-  );
+  )
 }
